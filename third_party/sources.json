@@ -1,0 +1,16 @@
+{
+  "sources": [
+    {
+      "name": "obs-studio",
+      "url": "https://github.com/obsproject/obs-studio.git",
+      "tag": "33.0.1",
+      "commit": "65c320b46e1af5c7a555161aea6182cdf7a8c524"
+    },
+    {
+      "name": "BlackHole",
+      "url": "https://github.com/ExistentialAudio/BlackHole.git",
+      "tag": "v0.7.1",
+      "commit": "e2b22aaaba4e507a097131704bf96dabc004d9cf"
+    }
+  ]
+}

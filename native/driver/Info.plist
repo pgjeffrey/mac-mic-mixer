@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleExecutable</key><string>MacMicMixer</string>
+  <key>CFBundleIdentifier</key><string>com.macmicmixer.driver</string>
+  <key>CFBundleName</key><string>Mac Mic Mixer</string>
+  <key>CFBundlePackageType</key><string>BNDL</string>
+  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleIconFile</key><string>Mixer.icns</string>
+  <key>CFPlugInDynamicRegistration</key><false/>
+  <key>CFPlugInFactories</key><dict>
+    <key>D22E5197-708E-4C5D-A5E3-0863CE84F274</key><string>BlackHole_Create</string>
+  </dict>
+  <key>CFPlugInTypes</key><dict>
+    <key>443ABAB8-E7B3-491A-B985-BEB9187030DB</key>
+    <array><string>D22E5197-708E-4C5D-A5E3-0863CE84F274</string></array>
+  </dict>
+</dict></plist>

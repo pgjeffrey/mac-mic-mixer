@@ -1,0 +1,23 @@
+#!/bin/bash
+set -euo pipefail
+if [ "${3:-/}" != "/" ]; then
+    echo "此卸载包只支持当前启动磁盘，请选择 /。" >&2
+    exit 1
+fi
+if /usr/bin/pgrep -x MacMicMixer >/dev/null; then
+    echo "请先从菜单栏退出 Mac Mic Mixer，再卸载。" >&2
+    exit 1
+fi
+for bundle in "/Applications/Mac Mic Mixer.app" "/Library/Audio/Plug-Ins/HAL/MacMicMixer.driver"; do
+    if [ -L "$bundle" ]; then
+        echo "目标是符号链接，已停止卸载：$bundle" >&2
+        exit 1
+    fi
+    if [ -e "$bundle" ]; then
+        actual=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$bundle/Contents/Info.plist" 2>/dev/null || true)
+        case "$bundle:$actual" in
+            "/Applications/Mac Mic Mixer.app:com.macmicmixer.app"|"/Library/Audio/Plug-Ins/HAL/MacMicMixer.driver:com.macmicmixer.driver") ;;
+            *) echo "目标目录不属于 Mac Mic Mixer，已保留：$bundle" >&2; exit 1 ;;
+        esac
+    fi
+done

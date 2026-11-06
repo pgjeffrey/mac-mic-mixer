@@ -1,0 +1,38 @@
+name: Build macOS application
+on:
+  workflow_dispatch:
+  push:
+    paths-ignore: ['**/*.md']
+  pull_request:
+    paths-ignore: ['**/*.md']
+jobs:
+  portable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make sources
+      - run: make test
+  macos:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select required Xcode
+        run: |
+          if [ -d /Applications/Xcode_26.5.app ]; then
+            sudo xcode-select --switch /Applications/Xcode_26.5.app/Contents/Developer
+          fi
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-platform-version
+      - name: Install build tools
+        run: brew install cmake
+      - name: Fetch pinned sources
+        run: make sources
+      - name: Build Apple Silicon package
+        run: make package ARCH=arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MacMicMixer-arm64-development
+          path: |
+            dist/arm64/*.pkg
+            dist/*source.tar.gz
+          if-no-files-found: error

@@ -1,0 +1,19 @@
+#!/bin/bash
+set -euo pipefail
+if [ "${3:-/}" != "/" ]; then
+    echo "此卸载包只支持当前启动磁盘，请选择 /。" >&2
+    exit 1
+fi
+# Preinstall validates ownership; validate again immediately before removal.
+for bundle in "/Applications/Mac Mic Mixer.app" "/Library/Audio/Plug-Ins/HAL/MacMicMixer.driver"; do
+    if [ -L "$bundle" ]; then echo "目标发生变化，已停止卸载：$bundle" >&2; exit 1; fi
+    if [ ! -e "$bundle" ]; then continue; fi
+    actual=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$bundle/Contents/Info.plist" 2>/dev/null || true)
+    case "$bundle:$actual" in
+        "/Applications/Mac Mic Mixer.app:com.macmicmixer.app"|"/Library/Audio/Plug-Ins/HAL/MacMicMixer.driver:com.macmicmixer.driver")
+            /bin/rm -rf -- "$bundle" ;;
+        *) echo "目标目录不属于 Mac Mic Mixer，已保留：$bundle" >&2; exit 1 ;;
+    esac
+done
+/usr/sbin/pkgutil --forget com.macmicmixer.installer >/dev/null 2>&1 || true
+echo "应用与虚拟驱动已移除，请重启 Mac。个人设置已保留。"

@@ -1,0 +1,9 @@
+#!/bin/bash
+set -euo pipefail
+if [ "${3:-/}" != "/" ]; then
+    echo "此安装包只支持当前启动磁盘，请选择 /。" >&2
+    exit 1
+fi
+# Installer requests a restart through Distribution.xml. Do not kill the shared
+# audio service or launch a desktop application from this privileged script.
+echo "Mac Mic Mixer 安装完成，请重启 Mac 后打开应用。"
