@@ -13,20 +13,7 @@ struct DeviceList: Decodable, Sendable {
     let driverInstalled: Bool
     let driverVersion: String
     let virtualName: String
-}
-
-struct InputSelection: Codable, Identifiable, Sendable {
-    var id = UUID()
-    var deviceUID = ""
-    var name = "未选择设备"
-    var gain: Double = 0.7
-    var muted = false
-}
-
-struct MixerSettings: Codable, Sendable {
-    var inputs: [InputSelection] = []
-    var masterGain: Double = 0.75
-    var startOnLaunch = true
+    let virtualInputInUse: Bool?
 }
 
 struct InputStatus: Decodable, Sendable {

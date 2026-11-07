@@ -20,6 +20,9 @@ def run(*args):
 
 def find_one(directory, name):
     matches = [path for path in directory.rglob(name) if path.is_file() or path.is_dir()]
+    # Xcode also emits .framework directories containing only a .tbd link stub.
+    if name.endswith(".framework"):
+        matches = [path for path in matches if (path / path.stem).is_file()]
     if len(matches) != 1:
         raise RuntimeError(f"Expected one {name} in {directory}, found: {matches}")
     return matches[0]
@@ -58,7 +61,7 @@ def main():
         raise RuntimeError(f"OBS dependency prefix not found: {deps}")
     native_build = work / "native"
     run("cmake", "-S", ROOT / "native", "-B", native_build, "-G", "Xcode",
-        f"-DCMAKE_OSX_ARCHITECTURES={args.arch}", f"-DOBS_SOURCE={obs_source}",
+        f"-DCMAKE_OSX_ARCHITECTURES={args.arch}", "-DCMAKE_OSX_DEPLOYMENT_TARGET=13.0", f"-DOBS_SOURCE={obs_source}",
         f"-DOBS_BUILD={obs_build}", f"-DOBS_FRAMEWORK={framework}", f"-DOBS_DEPS={deps}",
         "-DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO")
     run("cmake", "--build", native_build, "--config", "Release", "--parallel")
@@ -132,16 +135,19 @@ def main():
                       [framework.parent, metal.parent, deps / "lib", deps / "Frameworks", swift_runtime],
                       architecture=args.arch)
     identity = os.environ.get("MIXER_CODESIGN_IDENTITY", "-")
+    # Ad-hoc signatures have no Team ID, so hardened library validation rejects
+    # the app's own libraries. Enable hardened runtime for certificate signing.
+    signature_options = ["--options", "runtime"] if identity != "-" else []
     # Sign from the inside out after every load-command rewrite. A development
     # build is ad-hoc signed; release signing and notarization are explicit.
     for binary in sorted(binaries, key=lambda path: len(path.parts), reverse=True):
         if binary == executable or ".framework/" in str(binary):
             continue
-        run("codesign", "--force", "--sign", identity, "--options", "runtime", binary)
+        run("codesign", "--force", "--sign", identity, *signature_options, binary)
     for item in (app / "Contents/Frameworks").glob("*.framework"):
-        run("codesign", "--force", "--sign", identity, "--options", "runtime", item)
-    run("codesign", "--force", "--sign", identity, "--options", "runtime", driver)
-    run("codesign", "--force", "--sign", identity, "--options", "runtime",
+        run("codesign", "--force", "--sign", identity, *signature_options, item)
+    run("codesign", "--force", "--sign", identity, *signature_options, driver)
+    run("codesign", "--force", "--sign", identity, *signature_options,
         "--entitlements", ROOT / "app/entitlements.plist", app)
     run("codesign", "--verify", "--deep", "--strict", app)
     run("codesign", "--verify", "--strict", driver)

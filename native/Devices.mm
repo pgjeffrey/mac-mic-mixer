@@ -14,11 +14,11 @@ AudioDeviceID deviceForUID(const std::string &uid) {
     CFStringRef value = CFStringCreateWithCString(nullptr, uid.c_str(), kCFStringEncodingUTF8);
     if (!value) return kAudioObjectUnknown;
     AudioDeviceID result = kAudioObjectUnknown;
-    AudioValueTranslation translation{&value, sizeof(value), &result, sizeof(result)};
     AudioObjectPropertyAddress address{kAudioHardwarePropertyTranslateUIDToDevice,
                                       kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
-    UInt32 size = sizeof(translation);
-    OSStatus status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &address, 0, nullptr, &size, &translation);
+    UInt32 size = sizeof(result);
+    OSStatus status = AudioObjectGetPropertyData(kAudioObjectSystemObject, &address,
+                                               sizeof(value), &value, &size, &result);
     CFRelease(value);
     return status == noErr ? result : kAudioObjectUnknown;
 }
@@ -29,6 +29,16 @@ bool deviceAlive(AudioDeviceID device) {
     AudioObjectPropertyAddress address{kAudioDevicePropertyDeviceIsAlive,
                                       kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
     return AudioObjectGetPropertyData(device, &address, 0, nullptr, &size, &alive) == noErr && alive != 0;
+}
+
+std::optional<bool> deviceRunningSomewhere(AudioDeviceID device) {
+    if (device == kAudioObjectUnknown) return std::nullopt;
+    UInt32 running = 0, size = sizeof(running);
+    AudioObjectPropertyAddress address{kAudioDevicePropertyDeviceIsRunningSomewhere,
+                                      kAudioObjectPropertyScopeGlobal, kAudioObjectPropertyElementMain};
+    if (AudioObjectGetPropertyData(device, &address, 0, nullptr, &size, &running) != noErr)
+        return std::nullopt;
+    return running != 0;
 }
 
 uint32_t channelCount(AudioDeviceID device, AudioObjectPropertyScope scope) {

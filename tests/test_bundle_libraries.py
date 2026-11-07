@@ -71,7 +71,8 @@ class MachOFixture:
 class BundleTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory(prefix="mixer-bundle-")
-        self.root = Path(self.directory.name)
+        # macOS exposes temporary directories through the /var symlink.
+        self.root = Path(self.directory.name).resolve()
         self.app = self.root / "Mac Mic Mixer.app"
         self.frameworks = self.app / "Contents/Frameworks"
         self.frameworks.mkdir(parents=True)

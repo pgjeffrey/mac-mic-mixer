@@ -1,6 +1,7 @@
 #pragma once
 #include "core/AudioPipe.hpp"
 #include <AudioUnit/AudioUnit.h>
+#include <CoreAudio/CoreAudio.h>
 #include <atomic>
 #include <string>
 #include <vector>

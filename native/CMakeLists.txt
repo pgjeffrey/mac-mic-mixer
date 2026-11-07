@@ -32,3 +32,9 @@ add_library(MixerBridge STATIC MixerBridge.mm Devices.mm HALOutput.cpp LoopbackP
 target_include_directories(MixerBridge PRIVATE ${obs_includes} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_compile_options(MixerBridge PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>")
 target_link_libraries(MixerBridge PRIVATE OBSCore "-framework Foundation" "-framework CoreAudio" "-framework AudioUnit")
+
+add_executable(MixerStartupTest EXCLUDE_FROM_ALL "../tests/startup_thread_test.mm")
+target_include_directories(MixerStartupTest PRIVATE ${obs_includes})
+target_compile_options(MixerStartupTest PRIVATE -fobjc-arc)
+target_link_libraries(MixerStartupTest PRIVATE MixerBridge OBSCore "-framework Foundation" "-framework CoreAudio" "-framework AudioUnit")
+set_target_properties(MixerStartupTest PROPERTIES BUILD_RPATH "${OBS_FRAMEWORK}/..;${OBS_DEPS}/lib;${OBS_DEPS}/Frameworks")

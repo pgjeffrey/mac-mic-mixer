@@ -1,189 +1,308 @@
+import AppKit
 import SwiftUI
 
 struct MixerView: View {
     @ObservedObject var model: MixerModel
+    @State private var showingSettings = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: model.healthy ? "waveform.circle.fill" : "mic.circle")
-                        .font(.system(size: 36)).foregroundStyle(model.healthy ? Color.accentColor : .secondary)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Mac Mic Mixer").font(.title2.weight(.semibold))
-                        Text(model.statusTitle).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer()
-                    Button(model.desiredRunning ? "停止混音" : "开始混音") {
-                        if model.desiredRunning { model.stop() } else { model.start() }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(model.busy || (!model.desiredRunning && !model.canStart))
-                }
-
-                if !model.driverInstalled {
-                    GroupBox {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Label("虚拟麦克风尚未就绪", systemImage: "exclamationmark.triangle")
-                                .font(.headline)
-                            Text("请使用完整的 Mac Mic Mixer 安装包安装应用和虚拟麦克风，然后重启 Mac。")
-                                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                            HStack {
-                                Button("重新检查") { model.refresh() }
-                                Button("查看安装说明") { model.openHelp() }
+        VStack(spacing: 0) {
+            header
+            Divider()
+            GeometryReader { _ in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        feedback
+                        if model.settings.inputs.isEmpty {
+                            emptyState
+                        } else {
+                            let columnCount = 2
+                            let rowCount = (model.settings.inputs.count + columnCount - 1) / columnCount
+                            VStack(spacing: 12) {
+                                ForEach(0..<rowCount, id: \.self) { row in
+                                    HStack(alignment: .top, spacing: 12) {
+                                        ForEach(0..<columnCount, id: \.self) { column in
+                                            let index = row * columnCount + column
+                                            if index < model.settings.inputs.count {
+                                                let input = model.settings.inputs[index]
+                                                InputCard(model: model, input: input, index: index + 1)
+                                                    .id(input.id)
+                                                    .frame(minWidth: 0, maxWidth: .infinity)
+                                            } else {
+                                                Color.clear.frame(minWidth: 0, maxWidth: .infinity)
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
-                    }
-                }
-
-                if model.permission == .denied || model.permission == .restricted {
-                    HStack(alignment: .top) {
-                        Label("需要麦克风权限才能读取所选输入。", systemImage: "mic.slash")
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer()
-                        Button("打开系统设置") { model.openMicrophoneSettings() }
-                    }
-                    .padding(12).background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-                }
-
-                if let error = model.errorMessage {
-                    Label(error, systemImage: "exclamationmark.circle.fill")
-                        .foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                }
-                if let notice = model.notice {
-                    Label(notice, systemImage: "info.circle").foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let result = model.diagnosticMessage {
-                    Label(result, systemImage: model.diagnosticPassed ? "checkmark.circle" : "exclamationmark.circle")
-                        .foregroundStyle(model.diagnosticPassed ? Color.secondary : Color.red)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("音频输入").font(.headline)
-                        Spacer()
-                        Button { model.addInput() } label: { Label("添加输入", systemImage: "plus") }
-                            .disabled(model.desiredRunning || model.busy)
-                    }
-                    if model.settings.inputs.isEmpty {
-                        VStack(spacing: 10) {
-                            Image(systemName: "mic.badge.plus").font(.largeTitle).foregroundStyle(.secondary)
-                                .accessibilityHidden(true)
-                            Text("选择要合并的麦克风").font(.headline)
-                            Text("点击“添加输入”，选择蓝牙、USB、内置或虚拟输入。")
-                                .foregroundStyle(.secondary).multilineTextAlignment(.center)
-                            Button("添加第一个输入") { model.addInput() }.disabled(model.busy)
-                        }.frame(maxWidth: .infinity).padding(.vertical, 28)
-                    } else {
-                        ForEach(Array(model.settings.inputs.enumerated()), id: \.element.id) { index, input in
-                            InputRow(model: model, input: input, index: index + 1)
-                            if index < model.settings.inputs.count - 1 { Divider() }
                         }
                     }
-                    if model.desiredRunning {
-                        Text("停止混音后可以调整输入设备，音量和静音可随时修改。")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                    .padding(20)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
-
-                Divider()
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("虚拟麦克风").font(.headline)
-                        Spacer()
-                        Text("Mac Mic Mixer").foregroundStyle(.secondary).textSelection(.enabled)
-                    }
-                    Text("在其他 App 的麦克风设置中选择此名称，即可收到上方所有输入的混合声音。")
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    LevelMeter(level: model.status.outputPeak, label: "混合输出电平")
-                    HStack {
-                        Text("总音量").frame(width: 54, alignment: .leading)
-                        Slider(value: Binding(get: { model.settings.masterGain }, set: model.setMasterGain), in: 0...1.5)
-                            .accessibilityLabel("总音量")
-                        Text(model.settings.masterGain, format: .percent.precision(.fractionLength(0)))
-                            .monospacedDigit().frame(width: 48, alignment: .trailing)
-                    }
-                    if model.status.outputPeak > 0.95 {
-                        Label("电平接近满幅，请适当降低输入或总音量。", systemImage: "exclamationmark.triangle")
-                            .font(.callout).foregroundStyle(.orange)
-                    }
-                }
-
-                Divider()
-                VStack(alignment: .leading, spacing: 10) {
-                    Toggle("打开应用时自动开始已配置的混音", isOn: Binding(
-                        get: { model.settings.startOnLaunch }, set: model.setStartOnLaunch))
-                    Toggle("登录 Mac 时启动", isOn: Binding(get: { model.loginEnabled }, set: model.setLoginEnabled))
-                    Text("关闭窗口后继续收音；退出应用将停止混音。")
-                        .font(.caption).foregroundStyle(.secondary)
-                    DisclosureGroup("连接诊断") {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("驱动：\(model.driverInstalled ? model.driverVersion : "未就绪")")
-                            Text("积压丢帧：\(model.status.droppedFrames) · 缓冲欠载：\(model.status.underrunFrames)")
-                                .monospacedDigit()
-                            Text("本次运行累计输出限幅帧：\(model.status.clippedFrames)").monospacedDigit()
-                            Text("计数在启动时可能增加；持续增长或听到断音时请停止并重新连接设备。")
-                                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                            Button("发送测试音并验证虚拟麦克风…") { model.verifyLoopback() }
-                                .disabled(model.busy || !model.driverInstalled)
-                        }.font(.callout).padding(.top, 8)
-                    }
-                }.toggleStyle(.checkbox)
-            }.padding(24)
+            }
+            Divider()
+            OutputBar(model: model)
         }
-        .frame(minWidth: 640, idealWidth: 680, minHeight: 560, idealHeight: 760)
-        .toolbar { Button { model.openHelp() } label: { Label("使用说明", systemImage: "questionmark.circle") } }
+        .background(Color(nsColor: .underPageBackgroundColor))
+        .frame(minWidth: 640, idealWidth: 640, maxWidth: 640, minHeight: 420,
+               idealHeight: model.settings.inputs.count > 2 ? 560 : 420)
+    }
+
+    private var header: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text("音频输入").font(.headline)
+                    Text("\(model.settings.inputs.count) 路").font(.caption).foregroundStyle(.secondary)
+                }
+                Label {
+                    Text(model.statusTitle).foregroundStyle(.primary)
+                } icon: {
+                    Image(systemName: model.waitingForClient ? "clock" : model.healthy ? "checkmark.circle.fill" : "waveform")
+                        .foregroundStyle(model.healthy ? Color.green : Color.secondary)
+                }
+                .font(.caption)
+                .lineLimit(1).help(model.statusTitle)
+            }
+            Spacer(minLength: 12)
+            Button { model.addInput() } label: { Label("添加输入", systemImage: "plus") }
+                .disabled(model.desiredRunning || model.busy)
+                .help(model.desiredRunning ? "停止混音后可以添加输入" : "添加一个音频输入")
+            Button { showingSettings.toggle() } label: {
+                Image(systemName: "gearshape").frame(width: 20, height: 18)
+            }
+            .accessibilityLabel("设置与连接诊断").help("设置与连接诊断")
+            .popover(isPresented: $showingSettings, arrowEdge: .bottom) {
+                MixerSettingsPanel(model: model) {
+                    showingSettings = false
+                    DispatchQueue.main.async { model.verifyLoopback() }
+                }
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 12)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    @ViewBuilder private var feedback: some View {
+        if !model.driverInstalled {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("虚拟麦克风尚未就绪", systemImage: "exclamationmark.triangle").font(.headline)
+                Text("请安装完整安装包，并在重启 Mac 后重新检查。").foregroundStyle(.secondary)
+                HStack {
+                    Button("重新检查") { model.refresh() }
+                    Button("查看安装说明") { model.openHelp() }
+                }
+            }
+            .padding(14).frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        }
+        if model.permission == .denied || model.permission == .restricted {
+            HStack(spacing: 12) {
+                Label("需要麦克风权限才能读取所选输入。", systemImage: "mic.slash")
+                Spacer()
+                Button("打开系统设置") { model.openMicrophoneSettings() }
+            }
+            .padding(14)
+            .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        }
+        if let error = model.errorMessage {
+            Label(error, systemImage: "exclamationmark.circle.fill")
+                .foregroundStyle(.red).textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        if let notice = model.notice {
+            Label(notice, systemImage: "info.circle")
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+        if let result = model.diagnosticMessage {
+            Label(result, systemImage: model.diagnosticPassed ? "checkmark.circle" : "exclamationmark.circle")
+                .foregroundStyle(model.diagnosticPassed ? Color.secondary : Color.red)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "mic.badge.plus")
+                .font(.system(size: 28)).foregroundStyle(.secondary).accessibilityHidden(true)
+            Text("添加你的麦克风").font(.headline)
+            Text("选择需要合并的音频输入，在这里分别调节音量。").foregroundStyle(.secondary)
+            Button("添加第一个输入") { model.addInput() }
+                .buttonStyle(.borderedProminent).disabled(model.busy)
+        }
+        .frame(maxWidth: .infinity, minHeight: 220)
     }
 }
 
-private struct InputRow: View {
+private struct InputCard: View {
     @ObservedObject var model: MixerModel
     let input: InputSelection
     let index: Int
+
     private var state: InputStatus? { model.status.inputs.first { $0.deviceUID == input.deviceUID } }
+    private var device: InputDevice? { model.devices.first { $0.uid == input.deviceUID } }
+    private var deviceName: String { device?.name ?? input.name }
     private var statusText: String {
-        if input.deviceUID.isEmpty { return "请选择一个输入设备" }
-        if !model.devices.contains(where: { $0.uid == input.deviceUID }) { return "设备未连接" }
+        if input.deviceUID.isEmpty { return "未选择设备" }
+        if device == nil { return "设备未连接" }
         if !model.desiredRunning { return "已连接" }
-        if state?.receiving != true { return "等待设备收音" }
+        if model.waitingForClient { return "待命" }
+        if state?.receiving != true { return "等待收音" }
         return input.muted ? "已静音" : "正在收音"
     }
+    private var statusColor: Color {
+        if input.deviceUID.isEmpty { return .secondary }
+        if model.waitingForClient && device != nil { return .secondary }
+        if device == nil || (model.desiredRunning && state?.receiving != true) { return .orange }
+        return model.desiredRunning && !input.muted ? .green : .secondary
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("输入 \(index)").font(.subheadline.weight(.medium))
-                Spacer()
-                Text(statusText).font(.caption).foregroundStyle(.secondary)
-                Button { model.removeInput(input.id) } label: { Image(systemName: "minus.circle") }
-                    .buttonStyle(.borderless).help("移除此输入").accessibilityLabel("移除输入 \(index)")
-                    .disabled(model.desiredRunning || model.busy)
-            }
-            Picker("设备", selection: Binding(get: { input.deviceUID }, set: { model.selectDevice($0, for: input.id) })) {
-                Text("请选择设备").tag("")
-                if !input.deviceUID.isEmpty && !model.devices.contains(where: { $0.uid == input.deviceUID }) {
-                    Text("\(input.name)（未连接）").tag(input.deviceUID)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text("输入 \(index)").font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                Spacer(minLength: 4)
+                Label {
+                    Text(statusText).foregroundStyle(.primary)
+                } icon: {
+                    Image(systemName: device == nil ? "mic.slash" : model.waitingForClient ? "clock" : "mic.fill")
+                        .foregroundStyle(statusColor)
+                }.font(.caption)
+                Menu {
+                    Button("移除此输入", role: .destructive) { model.removeInput(input.id) }
+                } label: {
+                    Image(systemName: "ellipsis").frame(width: 20, height: 18)
                 }
-                ForEach(model.devices.filter { device in
-                    !model.settings.inputs.contains { $0.id != input.id && $0.deviceUID == device.uid }
-                }) { device in Text(device.name).tag(device.uid) }
-            }.disabled(model.desiredRunning || model.busy)
-                .accessibilityLabel("输入 \(index) 设备")
-            HStack(spacing: 12) {
-                Button { model.setMuted(!input.muted, for: input.id) } label: {
-                    Label(input.muted ? "取消静音" : "静音", systemImage: input.muted ? "mic.slash.fill" : "mic.fill")
-                }.frame(width: 98).accessibilityLabel("输入 \(index)\(input.muted ? "取消静音" : "静音")")
+                .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .disabled(model.desiredRunning || model.busy)
+                .accessibilityLabel("输入 \(index) 的更多操作")
+                .help(model.desiredRunning ? "停止混音后可以移除此输入" : "输入操作")
+            }
+            Group {
+                if model.desiredRunning {
+                    Text(deviceName).font(.headline).lineLimit(1).truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityLabel("输入 \(index) 设备，\(deviceName)")
+                        .help("\(deviceName) · 停止混音后可以切换设备")
+                } else {
+                    devicePicker
+                }
+            }.frame(height: 26)
+            LevelMeter(level: device == nil ? 0 : state?.peak ?? 0, label: "输入 \(index) 电平")
+            HStack(spacing: 10) {
                 Slider(value: Binding(get: { input.gain }, set: { model.setGain($0, for: input.id) }), in: 0...1.5)
                     .accessibilityLabel("输入 \(index) 音量")
                 Text(input.gain, format: .percent.precision(.fractionLength(0)))
-                    .monospacedDigit().frame(width: 48, alignment: .trailing)
+                    .font(.callout).monospacedDigit().frame(width: 42, alignment: .trailing)
+                Toggle(isOn: Binding(get: { input.muted }, set: { model.setMuted($0, for: input.id) })) {
+                    Label("静音", systemImage: input.muted ? "mic.slash.fill" : "mic")
+                }
+                .toggleStyle(.button).controlSize(.small)
+                .accessibilityLabel("输入 \(index) 静音")
+                .help(input.muted ? "取消静音" : "静音此输入")
             }
-            LevelMeter(level: state?.peak ?? 0, label: "输入 \(index) 电平")
-        }.padding(.vertical, 8)
+        }
+        .padding(16)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+        .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(Color.primary.opacity(0.08)) }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var devicePicker: some View {
+        Picker("设备", selection: Binding(get: { input.deviceUID }, set: { model.selectDevice($0, for: input.id) })) {
+            Text("请选择设备").tag("")
+            if !input.deviceUID.isEmpty && device == nil {
+                Text("\(input.name)（未连接）").tag(input.deviceUID)
+            }
+            ForEach(model.devices.filter { device in
+                !model.settings.inputs.contains { $0.id != input.id && $0.deviceUID == device.uid }
+            }) { device in Text(device.name).tag(device.uid) }
+        }
+        .labelsHidden().disabled(model.busy)
+        .accessibilityLabel("输入 \(index) 设备").help(deviceName)
+    }
+}
+
+private struct OutputBar: View {
+    @ObservedObject var model: MixerModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 20) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 10) {
+                        Text("混合输出").font(.caption).foregroundStyle(.secondary)
+                        Text("Mac Mic Mixer").font(.callout.weight(.medium)).textSelection(.enabled)
+                    }
+                    .help("在会议或录音 App 中选择 Mac Mic Mixer 麦克风")
+                    LevelMeter(level: model.status.outputPeak, label: "混合输出电平")
+                }.frame(maxWidth: .infinity)
+                Button {
+                    if model.desiredRunning { model.stop() } else { model.start() }
+                } label: {
+                    Label(model.actionTitle,
+                          systemImage: model.desiredRunning ? "stop.fill" : "play.fill")
+                        .frame(minWidth: 94)
+                }
+                .buttonStyle(.borderedProminent).controlSize(.large)
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(model.busy || (!model.desiredRunning && !model.canStart))
+            }
+            HStack(spacing: 12) {
+                Text("总音量").font(.callout).foregroundStyle(.secondary)
+                Slider(value: Binding(get: { model.settings.masterGain }, set: model.setMasterGain), in: 0...1.5)
+                    .accessibilityLabel("总音量")
+                Text(model.settings.masterGain, format: .percent.precision(.fractionLength(0)))
+                    .font(.callout).monospacedDigit().frame(width: 42, alignment: .trailing)
+                Text(model.waitingForClient ? "待命时释放实体麦克风" : "关闭窗口后继续混音")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize()
+            }
+            if model.status.outputPeak > 0.95 {
+                Label("电平接近满幅，请降低输入或总音量。", systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundStyle(.orange)
+            }
+        }
+        .padding(.horizontal, 20).padding(.vertical, 14)
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+}
+
+private struct MixerSettingsPanel: View {
+    @ObservedObject var model: MixerModel
+    let verify: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("设置").font(.headline)
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle("按需采集麦克风", isOn: Binding(
+                    get: { model.settings.captureOnDemand }, set: model.setCaptureOnDemand))
+                    .disabled(model.busy)
+                Text("其他 App 使用虚拟麦克风时采集，结束约 1 秒后释放。")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Toggle(model.settings.captureOnDemand ? "打开应用时自动待命" : "打开应用时自动开始混音", isOn: Binding(
+                    get: { model.settings.startOnLaunch }, set: model.setStartOnLaunch))
+                Toggle("登录 Mac 时启动", isOn: Binding(get: { model.loginEnabled }, set: model.setLoginEnabled))
+            }.toggleStyle(.checkbox)
+            Text("停止混音后可以增删或切换输入。退出应用将停止混音。")
+                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Divider()
+            VStack(alignment: .leading, spacing: 10) {
+                Text("连接诊断").font(.subheadline.weight(.semibold))
+                LabeledContent("虚拟麦克风", value: model.driverInstalled ? model.driverVersion : "未就绪")
+                LabeledContent("积压丢帧", value: "\(model.status.droppedFrames)")
+                LabeledContent("缓冲欠载", value: "\(model.status.underrunFrames)")
+                LabeledContent("累计限幅帧", value: "\(model.status.clippedFrames)")
+                Text("计数持续增长或听到断音时，请停止混音并重新连接设备。")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button("发送测试音并验证虚拟麦克风…", action: verify)
+                    .disabled(model.busy || !model.driverInstalled)
+            }.font(.callout).monospacedDigit()
+            Divider()
+            Button { model.openHelp() } label: { Label("使用说明", systemImage: "questionmark.circle") }
+        }
+        .padding(20).frame(width: 360)
     }
 }
 

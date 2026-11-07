@@ -86,4 +86,4 @@ git -C third_party/BlackHole rev-parse HEAD
 git -C third_party/BlackHole status --short
 ```
 
-项目已在上游工作区之外实现应用、音频桥接和打包流程；上游文件保持未修改。依赖版本清单见 [sources.json](sources.json)，可通过项目根目录的 `make sources` 重复获取与验证。当前仍未运行 macOS 编译和音频实机验收。
+项目已在上游工作区之外实现应用、音频桥接和打包流程；上游文件保持未修改。依赖版本清单见 [sources.json](sources.json)，可通过项目根目录的 `make sources` 重复获取与验证。2026-11-07 已通过 macOS 本机编译并完成系统安装；音频实机验收仍待重启及用户测试，见 [验证记录](../docs/validation.md)。

@@ -1,6 +1,7 @@
 #pragma once
 #include <CoreAudio/CoreAudio.h>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,7 @@ struct Device {
 };
 AudioDeviceID deviceForUID(const std::string &uid);
 bool deviceAlive(AudioDeviceID device);
+std::optional<bool> deviceRunningSomewhere(AudioDeviceID device);
 uint32_t channelCount(AudioDeviceID device, AudioObjectPropertyScope scope);
 std::vector<Device> inputDevices();
 uint64_t nowNS() noexcept;

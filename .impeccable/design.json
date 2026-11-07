@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-06T10:05:53Z",
+  "generatedAt": "2026-11-07T04:45:39Z",
   "title": "Design System: Mac Mic Mixer",
   "extensions": {
     "native": {
@@ -16,145 +16,181 @@
         "app/MixerView.swift",
         "app/MacMicMixerApp.swift",
         "app/MixerModel.swift",
-        "app/Models.swift"
+        "app/Models.swift",
+        "app/MixerSettings.swift",
+        "app/CaptureDemand.swift"
       ],
-      "representation": "原生语义颜色与字体不能无损写入 DESIGN.md 的 CSS token 字段，因此在此记录源码表达式；不推测固定色值、字号或行高。",
+      "representation": "原生语义颜色与字体记录源码表达式，几何参数以 pt 记录。系统外观与用户强调色由 SwiftUI/AppKit 解析。",
       "semanticColors": [
         {
-          "source": "Color.accentColor / .accentColor",
-          "purpose": "健康状态图标、一般电平条；主要按钮另由 borderedProminent 使用系统样式。"
+          "source": ".accentColor",
+          "purpose": "一般电平条。主要按钮由 borderedProminent 使用系统外观。"
         },
         {
-          "source": "inherited system foreground and window background",
-          "purpose": "默认正文与系统窗口背景，无自定义画布。"
+          "source": ".primary / Color.primary",
+          "purpose": "正文、设备名称与状态文字。卡片边线使用 Color.primary.opacity(0.08)。"
         },
         {
           "source": ".secondary / Color.secondary",
-          "purpose": "辅助文案、状态说明、通知及成功诊断结果。"
+          "purpose": "输入序号、辅助文案、通知、停止或静音图标与成功诊断结果。"
         },
         {
-          "source": ".quaternary",
-          "purpose": "权限提示背景的层级 ShapeStyle，不是固定颜色。"
+          "source": "Color(nsColor: .windowBackgroundColor)",
+          "purpose": "紧凑顶部栏表面。"
+        },
+        {
+          "source": "Color(nsColor: .underPageBackgroundColor)",
+          "purpose": "中部滚动区域及窗口内容基底。"
+        },
+        {
+          "source": "Color(nsColor: .controlBackgroundColor)",
+          "purpose": "输入卡片与固定输出栏表面。"
         },
         {
           "source": ".red / Color.red",
           "purpose": "错误与失败诊断结果。"
         },
         {
+          "source": ".green / Color.green",
+          "purpose": "健康顶部状态图标与运行期间有效、未静音输入图标。"
+        },
+        {
           "source": ".orange",
-          "purpose": "当前峰值超过 0.95 的电平条及当前输出警告。"
+          "purpose": "断线或等待收音图标、峰值超过 0.95 的电平条及当前输出警告。"
+        },
+        {
+          "source": "Color.orange.opacity(0.08)",
+          "purpose": "插件未就绪与权限提示的低不透明度背景。"
         }
       ],
       "semanticTypography": [
         {
-          "source": ".title2.weight(.semibold)",
-          "purpose": "产品名。"
-        },
-        {
           "source": ".headline",
-          "purpose": "区域标题、插件提示与空列表标题。"
+          "purpose": "顶部区域标题、运行时设备名、插件提示、空列表与设置标题。"
         },
         {
-          "source": ".subheadline.weight(.medium)",
+          "source": ".subheadline.weight(.semibold)",
+          "purpose": "连接诊断标题。"
+        },
+        {
+          "source": ".caption.weight(.medium)",
           "purpose": "输入序号。"
         },
         {
           "source": "inherited system text style",
-          "purpose": "正文、状态、设备菜单和音量标签。"
+          "purpose": "正文、设备菜单和复选框。"
         },
         {
           "source": ".callout",
-          "purpose": "诊断内容与当前输出警告。"
+          "purpose": "诊断内容、音量读数和总音量标签。"
+        },
+        {
+          "source": ".callout.weight(.medium)",
+          "purpose": "输出名称。"
         },
         {
           "source": ".caption",
-          "purpose": "输入状态、操作提示和关闭窗口说明。"
+          "purpose": "输入数量、运行及输入状态、输出标签、警告、操作提示和关闭窗口说明。"
         },
         {
           "source": ".monospacedDigit()",
-          "purpose": "音量百分比与诊断计数；保留原来的文字样式。"
+          "purpose": "音量百分比与诊断计数，保留原来的文字样式。"
         },
         {
-          "source": ".system(size: 36)",
-          "purpose": "仅顶部状态 SF Symbol，单位为 pt。"
-        },
-        {
-          "source": ".largeTitle",
-          "purpose": "仅空列表 SF Symbol。"
+          "source": ".system(size: 28)",
+          "purpose": "仅空列表 SF Symbol，单位为 pt。"
         }
       ],
       "window": {
         "scene": "Window",
-        "content": "ScrollView > leading VStack",
+        "content": "VStack(spacing: 0) > header, Divider, GeometryReader > ScrollView > feedback and VStack rows > HStack columns, Divider, OutputBar",
         "unit": "pt",
         "minimum": {
           "width": 640,
-          "height": 560
+          "height": 420
         },
         "ideal": {
-          "width": 680,
-          "height": 760
+          "width": 640,
+          "height": 420,
+          "appliesWhen": "inputs.count <= 2"
         },
-        "maximumWidth": "not explicitly constrained",
-        "webBreakpoints": "not applicable"
+        "maximumWidth": 640,
+        "webBreakpoints": "not applicable",
+        "idealWithMoreThanTwoInputs": {
+          "width": 640,
+          "height": 560
+        },
+        "defaultSize": "MacMicMixerApp.Window.defaultSize 与上述输入数量对应的理想尺寸一致。",
+        "resizability": "使用 contentSize，原生最小和最大宽度均为 640pt，高度可调。"
       },
       "componentConventions": [
         {
           "name": "主要操作",
-          "source": "Button.buttonStyle(.borderedProminent)",
-          "behavior": "开始/停止共用按钮；Command-Return；忙碌或不可开始时禁用。"
+          "source": "OutputBar > Button.buttonStyle(.borderedProminent).controlSize(.large)",
+          "behavior": "固定底部开始/停止共用按钮，文字与播放/停止图标跟随运行意图，Command-Return，忙碌或不可开始时禁用。"
         },
         {
-          "name": "输入行",
-          "source": "Picker, Button, Slider, ProgressView, Divider",
-          "behavior": "设备增删选择在运行/忙碌时禁用；静音与音量可实时调整；滑块 0–150%。"
+          "name": "输入卡片",
+          "source": "InputCard > VStack, RoundedRectangle, Text or Picker, ProgressView, Slider, Toggle",
+          "behavior": "运行时显示 headline 设备名，单行中间截断并保留完整帮助与辅助功能名称。停止时显示设备 Picker，忙碌时禁用。音量与静音实时可调，滑块 0–150%。卡片几何使用 frontmatter 的 input-card，使用原生控件背景与主要前景 0.08 不透明度边线。"
+        },
+        {
+          "name": "输入静音",
+          "source": "Toggle.toggleStyle(.button).controlSize(.small)",
+          "behavior": "明确静音文字、选中外观与 SF Symbol，帮助文字跟随静音状态。"
         },
         {
           "name": "移除输入",
-          "source": "Button.buttonStyle(.borderless), minus.circle",
-          "behavior": "提供 help 与包含输入序号的 accessibilityLabel。"
+          "source": "Menu.menuStyle(.borderlessButton).menuIndicator(.hidden), ellipsis, destructive Button",
+          "behavior": "卡片右上角菜单收纳移除输入，运行或忙碌时禁用，提供 help 与包含输入序号的 accessibilityLabel。"
         },
         {
           "name": "电平条",
           "source": "LevelMeter > ProgressView",
-          "behavior": "峰值对数映射 −60–0dB 并钳制；当前峰值 > 0.95 为橙色；具有标签与值描述。"
+          "behavior": "峰值对数映射 −60–0dB 并钳制，当前峰值 > 0.95 为橙色，具有标签与值描述。断线卡片输入电平归零。"
         },
         {
-          "name": "插件提示",
-          "source": "GroupBox",
-          "behavior": "重新检查和安装说明使用标准按钮。"
+          "name": "恢复提示",
+          "source": "VStack or HStack, Color.orange.opacity(0.08), RoundedRectangle(cornerRadius: 12)",
+          "behavior": "滚动区顶部显示插件未就绪或权限拒绝/受限提示，几何使用 frontmatter 的 feedback-banner，提供重新检查、安装说明或系统设置动作。"
         },
         {
           "name": "启动设置",
-          "source": "Toggle.toggleStyle(.checkbox)",
-          "behavior": "两项桌面复选框，区分打开应用时混音与登录时启动。"
+          "source": "MixerSettingsPanel > Toggle.toggleStyle(.checkbox)",
+          "behavior": "顶部齿轮打开原生 popover。桌面复选框包含按需采集、打开应用时自动待命或混音、登录时启动。按需模式说明使用时采集、结束后释放，忙碌时禁用模式切换。"
         },
         {
           "name": "连接诊断",
-          "source": "DisclosureGroup, NSAlert",
-          "behavior": "展开查看累计计数；执行回读前明确告知测试音与暂停混音，并可取消。"
+          "source": "MixerSettingsPanel, LabeledContent, Divider, NSAlert",
+          "behavior": "设置面板显示驱动版本与累计计数。验证按钮先关闭 popover，再调用诊断。原生确认明确告知测试音、暂停混音并可取消。"
         },
         {
           "name": "诊断结果",
           "source": "Label, diagnosticMessage, diagnosticPassed",
-          "behavior": "结果独立于 errorMessage；普通刷新或恢复混音不清除；下次确认执行验证时清除；不持久保存。"
+          "behavior": "结果位于滚动区输入之前，独立于 errorMessage。普通刷新或恢复混音不清除，下次确认执行验证时清除，不持久保存。"
+        },
+        {
+          "name": "混合输出",
+          "source": "OutputBar > VStack, HStack, ProgressView, Slider",
+          "behavior": "固定底部显示输出名称、电平、总音量、右对齐读数及关闭窗口继续混音的说明。读数几何使用 frontmatter 的 gain-readout。当前输出峰值 > 0.95 才显示警告。"
         },
         {
           "name": "菜单栏入口",
           "source": "MenuBarExtra, SF Symbols",
-          "behavior": "状态、重新打开窗口、开始/停止和 Command-Q 退出；关闭窗口继续运行。"
+          "behavior": "状态、重新打开窗口、开始/停止和 Command-Q 退出，关闭窗口继续运行。"
         }
       ],
       "stateSemantics": {
         "currentNearFullScale": "当前 outputPeak > 0.95 才显示输出警告。",
-        "historicalClipping": "clippedFrames 仅在诊断中显示为本次运行累计输出限幅帧，不单独触发当前警告。",
-        "statusFeedback": "状态使用文字与符号，颜色为补充。"
+        "historicalClipping": "clippedFrames 在设置面板连接诊断中显示为累计限幅帧，表达本次运行历史计数。",
+        "statusFeedback": "状态使用文字与符号，颜色为补充。",
+        "onDemand": "已启用但没有读取者时显示待命与时钟符号，实体麦克风释放。按钮区分开始待命、停止待命与混音启停。"
       },
       "systemManagedAppearance": {
         "focusHoverPressedDisabled": "原生控件默认行为，未定制。",
-        "shadowsAndMaterials": "无自定义阴影或材质；GroupBox、系统窗口、菜单与 NSAlert 由 macOS 管理。",
+        "shadowsAndMaterials": "输入卡片以语义表面和轻边线分层，反馈使用低不透明度系统橙色。系统窗口、popover、菜单与 NSAlert 的深度由 macOS 管理。",
         "motion": "无显式自定义动画或运动 token。",
-        "icons": "SF Symbols；装饰状态图标在源码中对辅助功能隐藏。"
+        "icons": "SF Symbols，空态装饰图标在源码中对辅助功能隐藏。"
       },
       "webPanel": {
         "previewsGenerated": false,
@@ -162,52 +198,115 @@
         "launcherLimitation": "当前 launcher 仅识别 web/ios/android/adaptive，误将 PRODUCT.md 的 macos 视为 web；真实平台保持 macos。"
       },
       "verification": {
-        "scope": "SOURCE ONLY",
-        "sourceReview": "通过，范围仅为源码；已保留回读诊断结果并区分当前峰值与历史累计限幅。",
-        "host": "Linux",
-        "macOSSDKAvailable": false,
-        "currentNativeScreenshotsAvailable": false,
+        "scope": "源码、macOS 原生 SwiftUI 夹具渲染与已安装应用双路收音状态显示",
+        "sourceReview": "已对照当前 MixerView.swift 与 MacMicMixerApp.swift 的显式行列布局、稳定输入标识与等宽卡片，保留 UID 选择、增益、静音及诊断结果语义。",
+        "host": "macOS",
+        "macOSSDKAvailable": true,
+        "currentNativeScreenshotsAvailable": true,
+        "rendering": "NSHostingView 承载实际 SwiftUI 视图，替换 MixerModel 数据。截图中的设备、运行状态与电平来自夹具。",
+        "captureDirectory": ".build/ui-qa/",
+        "captureCases": [
+          "two.png",
+          "startup.png",
+          "four.png",
+          "wide.png",
+          "dark.png",
+          "minimum.png",
+          "paused.png",
+          "disconnected.png",
+          "empty.png",
+          "settings.png"
+        ],
+        "fixtureSizes": {
+          "two": "860×420pt",
+          "four": "860×560pt",
+          "wide": "1080×560pt",
+          "dark": "860×560pt",
+          "minimum": "640×420pt",
+          "paused": "860×560pt",
+          "disconnected": "860×420pt",
+          "empty": "860×420pt",
+          "settings": "640×420pt 父窗口及其原生设置 popover",
+          "startup": "860×420pt"
+        },
+        "historicalApplicationCapture": {
+          "path": ".build/logs/mixer-device-fix.png",
+          "purpose": "此前真实应用的旧版布局截图。当前卡片布局依据 ui-qa 夹具及 card-ui-installed.png 已安装应用截图。"
+        },
         "renderedColorSamplingPerformed": false,
-        "pending": [
-          "macOS 13 及目标 Apple 芯片设备上的构建与安装",
-          "明暗外观、系统强调色与实际对比度",
-          "最小及较大窗口、长设备名称、较多输入与文字缩放",
+        "audioEvidence": "已安装界面的双路正在收音状态有当前截图与用户确认。目标应用听感、回读及长期稳定性按 docs/validation.md 单独验收。原生夹具用于布局与状态表达检查。",
+        "outsideFixtureScope": [
+          "macOS 13 实机兼容性",
+          "系统强调色变化与实际对比度测量",
+          "长设备名称的完整交互与文字缩放",
           "键盘遍历、快捷键、菜单栏与窗口行为",
           "VoiceOver 标签、值、遍历顺序与电平更新朗读频率",
-          "麦克风权限、登录启动授权与安装后的真实状态",
+          "麦克风权限、登录启动授权与真实设备状态",
           "多设备收音、断连恢复、静音、音量、真实回读与其他应用接收声音"
-        ]
+        ],
+        "shippingRasterAssetsAdded": false,
+        "popoverCapture": "测试夹具在视图附加后激活初始绑定，打开与生产视图相同的齿轮锚定 popover。截图包含父窗口和完整弹出面板，以原生中性背景隔离无关桌面内容。",
+        "stoppedCapture": "paused.png 使用与 EngineStatus.stopped 一致的空输入状态、零电平及 false 的 allReceiving/anyReceiving，保留已配置设备。",
+        "startupCapture": "startup.png 来自当前显式行列布局。夹具先模拟驱动未就绪、设备为空和停止状态，随后恢复驱动、设备及运行状态，每 0.25 秒（4Hz）发布状态和设备更新，运行 3 秒后截图。",
+        "installedApplicationCapture": {
+          "path": ".build/logs/card-ui-installed.png",
+          "observed": "已安装应用完整显示 MiRemoteV 2ch 与 Wireless Mic Rx 两张卡片，两路状态均为正在收音，顶部显示正在输出混合声音。",
+          "userConfirmation": "用户点击开始后明确确认“正常显示，两路都在收音”。",
+          "scope": "当前已安装界面及两路收音状态显示。目标应用听感、回读与长期稳定性分别验收。"
+        },
+        "windowConstraintsEvidence": ".build/logs/window-constraints.log",
+        "currentDemandEvidence": ".build/logs/demand-runtime.log",
+        "historicalFixtureScope": "既有矩阵截图记录前一轮可变宽度布局。固定宽度与按需状态以独立原生窗口约束检查及实机日志为准。"
+      },
+      "layout": {
+        "grid": {
+          "source": "VStack rows with HStack columns, directly laid out with equal-width frames",
+          "defaultColumns": 2,
+          "columnAndRowSpacing": "{spacing.group}",
+          "widthMeasurement": "窗口宽度固定为 640pt。",
+          "cardIdentity": "InputCard.id(input.id)",
+          "columnWidth": "每个卡片与末行透明占位使用 frame(minWidth: 0, maxWidth: .infinity)，维持等宽列。",
+          "fixedColumns": 2
+        },
+        "fixedRegions": "顶部输入数量/运行状态/添加/设置与底部输出/总音量/开始停止位于 ScrollView 外。",
+        "scrollingRegion": "恢复提示、错误、通知、诊断结果与输入卡片。",
+        "contentInsets": "{spacing.content}",
+        "feedbackToGridSpacing": "{spacing.card}",
+        "cardInternalSpacing": "{spacing.group}",
+        "controlRowSpacing": "{spacing.controls}",
+        "headerTitleToStatusSpacing": "4pt",
+        "emptyStateMinimumHeight": "220pt"
       }
     }
   },
   "components": [],
   "narrative": {
     "northStar": "macOS 原生操作工具",
-    "overview": "界面延续已确认的单窗口操作流程与 macOS 系统视觉，不引入独立品牌世界。设备选择、实际收音状态、音量和开始/停止操作构成主要层级；使用 SwiftUI 与 AppKit 标准控件，让用户沿用桌面系统的操作习惯。\n\n本文依据 [PRODUCT.md](PRODUCT.md)、[MixerView.swift](app/MixerView.swift)、[MacMicMixerApp.swift](app/MacMicMixerApp.swift)、[MixerModel.swift](app/MixerModel.swift) 与 [Models.swift](app/Models.swift) 记录已实现的源码约定。目标为 Apple 芯片 Mac，运行部署基线为 macOS 13。本次审查范围为 **SOURCE ONLY**：开发主机为 Linux，没有可用的 macOS SDK、当前版本原生截图或运行证据；源码审查通过不等于构建、视觉、辅助功能或真实音频验收完成。",
+    "overview": "界面延续已确认的单窗口操作流程与 macOS 系统视觉。设备选择、实际收音状态、音量和开始/停止操作构成主要层级。使用 SwiftUI 与 AppKit 标准控件，让用户沿用桌面系统的操作习惯。\n\n本文依据 [MixerView.swift](app/MixerView.swift)、[MacMicMixerApp.swift](app/MacMicMixerApp.swift)、[MixerModel.swift](app/MixerModel.swift)、[Models.swift](app/Models.swift) 与用户确认的卡片布局，记录当前实现。目标为 Apple 芯片 Mac，运行部署基线为 macOS 13。macOS 原生界面夹具以 `NSHostingView` 承载当前 SwiftUI 视图，替换 `MixerModel` 数据，覆盖两路、四路、宽窗口、深色、最小窗口、停止、断线、空态、设置面板与启动状态切换，存于 `.build/ui-qa/`。夹具中的电平与设备状态来自测试数据。\n\n已安装应用的当前截图存于 `.build/logs/card-ui-installed.png`，其中 `MiRemoteV 2ch` 和 `Wireless Mic Rx` 的卡片完整显示，两路均显示“正在收音”。用户点击开始后确认“正常显示，两路都在收音”。目标应用听感、回读及长期稳定性按[验证记录](docs/validation.md)单独验收。",
     "keyCharacteristics": [
       "系统字体、语义颜色、SF Symbols 和原生交互。",
-      "可滚动的单列窗口，以留白、标题和分隔线组织内容。",
+      "窗口宽度固定为（640pt），紧凑输入卡片组成两列网格，中部滚动，顶部与底部操作固定可见。",
       "状态使用文字与符号表达，颜色补充含义。",
       "当前运行状态、持续保留的诊断结果与累计计数分别表达。"
     ],
     "rules": [
       {
         "name": "The Semantic Color Rule",
-        "body": "保留系统语义颜色及其明暗外观适配；不从 Linux 环境推测 macOS 渲染色值，也不把源码颜色声明当作对比度验证。",
+        "body": "保留系统语义颜色及其明暗外观适配。对比度结论以原生渲染和测量为依据。",
         "section": "colors"
       }
     ],
     "dos": [
       "Do 延用 SwiftUI/AppKit 标准控件、系统语义字体颜色与 SF Symbols。",
       "Do 使用文字和图标共同表达状态，并区分当前音频状态、历史累计计数与独立诊断结果。",
-      "Do 延用已记录的点值间距、音量读数对齐和单列滚动布局。",
-      "Do 在 macOS 13 及目标 Apple 芯片设备上补充构建、安装、真实音频、明暗外观、窗口缩放、键盘和 VoiceOver 验证，再作运行或辅助功能结论。"
+      "Do 延用已记录的点值间距、卡片网格、音量读数对齐和固定输出栏。",
+      "Do 用原生明暗外观及窗口尺寸截图检查布局，并分别记录 macOS 13 兼容性、真实音频、键盘和 VoiceOver 验证。"
     ],
     "donts": [
       "Don't 以网页/移动端样式替代当前 macOS 控件，或为工具附加未经请求的品牌视觉。",
       "Don't 把累计限幅帧当作当前持续警告，或用普通刷新清除用户刚获得的诊断结果。",
       "Don't 把系统语义色替换为猜测的固定色值，或为原生控件伪造 HTML/CSS 预览与截图依据。",
-      "Don't 把源码标签、状态文案或 SOURCE ONLY 审查当作真实设备、视觉对比度、键盘或 VoiceOver 验收。"
+      "Don't 把夹具电平、设备状态或源码辅助功能标签当作真实音频、视觉对比度、键盘或 VoiceOver 验收。"
     ]
   }
 }

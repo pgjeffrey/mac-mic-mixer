@@ -1,6 +1,47 @@
 # 验证记录与 Mac 验收步骤
 
-## 当前证据（2026-11-06）
+## 当前证据（2026-11-07）
+
+本机：Apple 芯片 Mac，macOS 27.2（26B123），Xcode 27.2（27B52）、macOS SDK 27.2、Swift 6.4.2。项目内 `.build/tooling` 使用 CMake 3.31.10；系统原有 CMake 为 3.26.4。依赖下载使用本机现有代理，仅设置构建命令的环境变量。
+
+| 检查 | 实际结果 | 结论范围 |
+| --- | --- | --- |
+| `make test` | 通过 | 9 项 Python 测试、结构检查、C++ ASan/UBSan 音频缓冲测试及 macOS Core Audio UID 查询回归测试 |
+| `make package ARCH=arm64` | 通过 | OBS、采集模块、桥接、SwiftUI App、虚拟驱动均在本机编译；生成安装包、卸载包和源码归档 |
+| 原生模块部署目标 | 已核对 | `MixerMacInput.so` 的 Mach-O 最低版本为 macOS 13.0；未在 macOS 13 实机运行 |
+| 应用及驱动签名检查 | 通过 | `codesign --verify --deep --strict`；本地 ad-hoc 签名，未配置 Developer ID 或公证 |
+| 系统安装 | 成功 | 安装器回执 `com.macmicmixer.installer`，版本 0.1.0；安装器明确要求重启 |
+| 应用启动 | 通过 | 已从 `/Applications/Mac Mic Mixer.app` 启动，安装后可执行文件与构建产物 SHA-256 一致 |
+| 虚拟设备加载 | 重启后通过 | Core Audio 已加载公开输入与隐藏输出，二者均存活，输出声道可用 |
+| 应用识别驱动 | 修复后通过 | 实际调用 `mm_devices_json` 返回 `driverInstalled=true`、版本 0.1.0，已更新并重新打开安装的应用 |
+| OBS 初始化线程回归 | 修复后通过 | `make test-engine` 通过公开桥接 API 在后台串行队列执行 20 轮真实 OBS 初始化、资源缺失清理和重试，逐次断言初始化发生在主线程 |
+| 正常界面双路运行 | 已观察 | 应用按保存配置恢复混音，`MiRemoteV 2ch` 和 `Wireless Mic Rx` 均显示正在收音，总状态显示正在输出混合声音 |
+| 卡片界面与安装更新 | 通过 | 原生夹具覆盖两列、三列、四路、深浅外观、最小窗口、空态、断线、停止及启动刷新，安装后的实际窗口显示两路卡片，用户确认开始混音后两路均在收音 |
+| 按需采集状态与配置迁移 | 通过 | 验证空闲不采集、读取者激活、一秒空闲缓冲、重新使用取消释放、手动停止优先、检测失败释放、持续模式及旧配置保留 |
+| 按需采集实机闭环 | 通过 | 临时接收进程读取虚拟麦克风后 DJI 和内置麦克风开始工作，两个读取者重叠时保持采集，最后一个结束后释放，随后重新使用可再次启用 |
+| 固定窗口宽度 | 通过 | 按用户后续要求固定为 640pt，原生 Window 的 contentMinSize.width 与 contentMaxSize.width 均为 640，高度最大值大于最小值 |
+| 测试音回读、目标应用听感及稳定性 | 待用户测试 | 需要在接收应用中验证实际声音、独立静音和长时间运行 |
+| 卸载包执行 | 未执行 | 已生成卸载包，尚未验证卸载后的实际行为 |
+
+本次修复了本机首次验证暴露的问题：测试中的 `/var` 符号链接路径比较、Xcode `.tbd` 框架占位目录识别、`AudioDeviceID` 所需头文件、原生 CMake 部署目标，以及本地 ad-hoc 签名下加固运行时拒绝加载无 Team ID 动态库的问题。证书签名仍启用加固运行时。
+
+安装应用位于 `/Applications/Mac Mic Mixer.app`，驱动位于 `/Library/Audio/Plug-Ins/HAL/MacMicMixer.driver`。安装包在 `dist/arm64/`。管理员安装器无法读取项目 Documents 路径下的包，本次将同一安装包暂存到系统临时目录后完成安装。
+
+本地日志保存在 `.build/logs/test.log`、`.build/logs/build.log`、`.build/logs/install.log`；安装后的设备列表保存在 `.build/logs/audio-devices-installed.json`。这些日志不纳入源码归档。
+
+重启后排查发现 `deviceForUID` 错误使用 `AudioValueTranslation` 查询 `kAudioHardwarePropertyTranslateUIDToDevice`，导致系统已加载的设备被应用误判为未就绪。已按 macOS SDK 契约通过 qualifier 传入 UID，直接接收设备 ID。本机回归测试覆盖 9 个系统设备、空 UID、缺失 UID 和混音驱动两个端点。修复版已更新主应用，驱动二进制与已加载版本的 SHA-256 相同。日志见 `.build/logs/test-device-fix.log`、`.build/logs/build-device-fix.log`、`.build/logs/driver-readiness.json`。
+
+下一步由用户添加输入、开始混音并授予麦克风权限，再在目标应用中选择 `Mac Mic Mixer`。当前系统能枚举 `Wireless Mic Rx`（DJI USB 输入）和内置麦克风，真实双路收音待测试。
+
+用户提供的 11:37 崩溃报告显示，后台引擎队列调用 `obs_startup` 时，`obs_hotkeys_platform_init` 进入 HIToolbox 的输入源查询并触发主线程断言。已将 OBS 初始化及 UI 调度器注册同步转交主线程。回归测试在修复前明确报告后台初始化错误，修复后完成 20 轮真实初始化及清理。修复版已更新主应用，实际启动日志确认两路输入均初始化成功。日志见 `.build/logs/startup-thread-test.log`、`.build/logs/test-startup-fix.log` 和 `.build/logs/build-startup-fix.log`。
+
+卡片版界面改为默认两列、宽窗口三列，中部独立滚动，底部固定总输出控制。初版使用 `LazyVGrid` 时在已安装应用中出现输入区空白，已改用直接布局的 `VStack` 行与 `HStack` 列，并保留输入稳定标识。最终实际窗口截图为 `.build/logs/card-ui-installed.png`，设备名可见性检查通过。用户点击开始混音后确认“正常显示，两路都在收音”。独立界面复核结论为 `ship`，范围为布局、状态表达及上述运行证据。原生界面夹具位于 `.build/ui-qa/`，涉及的辅助功能、目标应用听感及长期运行继续按对应项目验收。
+
+按需采集实测使用用户当前三路配置。接收进程读取虚拟输入后，约 0.61 秒内观察到输出端、DJI 与内置麦克风处于运行状态，最后一个接收进程结束后约 1.29 秒观察到这些端点空闲。该测量包含接收端启动和轮询开销。两次六秒接收与一次四秒接收分别取得 288000、288000、192000 帧，样本只在进程内存中处理。MiRemoteV 的全局运行标记在空闲时仍为 1，其已有外部客户端与本 App 的按需状态分别记录。日志位于 `.build/logs/demand-runtime.log` 和 `.build/logs/demand-runtime.json`。
+
+最终安装版本再次通过相同三接收端场景，观察启用约 0.62 秒、释放约 1.48 秒。日志为 `.build/logs/demand-final-runtime.log`。待命可在尚未授权时启用，实际有接收者时才申请麦克风权限，取消待命后授权回调不会重新启用采集。轮询定时器使用 common run-loop modes，菜单和拖动交互期间继续监测。当前安装可执行文件 SHA-256 与构建产物一致，窗口约束检查记录于 `.build/logs/window-constraints.log`。
+
+## 此前证据（2026-11-06）
 
 开发主机：Linux x86_64，缺少 macOS SDK、Xcode 和 Swift 编译器。
 

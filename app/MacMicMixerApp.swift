@@ -32,6 +32,8 @@ struct MacMicMixerApp: App {
         Window("Mac Mic Mixer", id: "mixer") {
             MixerView(model: model).onAppear { AppDelegate.model = model }
         }
+        .defaultSize(width: 640, height: model.settings.inputs.count > 2 ? 560 : 420)
+        .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) {}
             CommandGroup(replacing: .help) { Button("Mac Mic Mixer 使用说明") { model.openHelp() } }
@@ -48,7 +50,7 @@ private struct MenuContent: View {
     var body: some View {
         Text(model.statusTitle)
         Button("打开混音窗口") { openWindow(id: "mixer"); NSApp.activate(ignoringOtherApps: true) }
-        Button(model.desiredRunning ? "停止混音" : "开始混音") {
+        Button(model.actionTitle) {
             if model.desiredRunning { model.stop() } else { model.start() }
         }.disabled(model.busy || (!model.desiredRunning && !model.canStart))
         Divider()

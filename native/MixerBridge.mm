@@ -98,9 +98,13 @@ struct MMEngine {
         // preserves the unmodified, mature OBS mixer; no display or recording
         // is created. The Metal dependency is deliberately retained.
         if (obs_initialized()) { error = "音频引擎已由其他实例占用"; return false; }
-        initialized = obs_startup("en-US", nullptr, nullptr);
+        // OBS initializes macOS keyboard/input-source APIs on this call.
+        uiTask([](void *context) {
+            auto &engine = *static_cast<MMEngine *>(context);
+            engine.initialized = obs_startup("en-US", nullptr, nullptr);
+            if (engine.initialized) obs_set_ui_task_handler(uiTask);
+        }, this, true);
         if (!initialized) { error = "初始化 OBS 音频引擎失败"; return false; }
-        obs_set_ui_task_handler(uiTask);
         // macOS libobs resolves effects from its framework's Resources folder.
         // Its platform resolver bypasses deprecated obs_add_data_path fallbacks.
         const auto graphics = bundlePath + "/Contents/Frameworks/libobs-metal.dylib";
@@ -279,7 +283,11 @@ char *mm_devices_json(void) {
         bool compatible = [version isEqualToString:@"0.1.0"];
         bool installed = identity && compatible && mixer::deviceAlive(mixer::deviceForUID(mixer::deviceUID)) &&
                                     mixer::deviceAlive(mixer::deviceForUID(mixer::outputUID));
+        id inputInUse = NSNull.null;
+        auto usage = mixer::deviceRunningSomewhere(mixer::deviceForUID(mixer::deviceUID));
+        if (usage.has_value()) inputInUse = @(*usage);
         return json(@{@"inputs":inputs, @"driverInstalled":@(installed),
+                      @"virtualInputInUse":inputInUse,
                       @"driverVersion":version,
                       @"virtualName":@(mixer::deviceName)});
     }

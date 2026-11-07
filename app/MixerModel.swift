@@ -18,6 +18,8 @@ final class MixerModel: ObservableObject {
     @Published private(set) var diagnosticPassed = false
     @Published private(set) var loginEnabled = SMAppService.mainApp.status == .enabled
     @Published private(set) var permission = AVCaptureDevice.authorizationStatus(for: .audio)
+    @Published private(set) var virtualInputInUse: Bool?
+    @Published private var requestingPermission = false
 
     private let worker = EngineWorker()
     private var timer: Timer?
@@ -29,6 +31,8 @@ final class MixerModel: ObservableObject {
     private var recoveryAttempts = 0
     private var nextRecovery = Date.distantPast
     private var controlsUpdate: DispatchWorkItem?
+    private var captureDemand = CaptureDemand()
+    private var commandVersion = 0
 
     private static var settingsURL: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -49,9 +53,11 @@ final class MixerModel: ObservableObject {
             let gain = settings.inputs[index].gain
             settings.inputs[index].gain = min(max(gain.isFinite ? gain : 0.7, 0), 1.5)
         }
-        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+        let refreshTimer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
+        RunLoop.main.add(refreshTimer, forMode: .common)
+        timer = refreshTimer
         let center = NSWorkspace.shared.notificationCenter
         observers.append(center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.suspend() }
@@ -77,46 +83,63 @@ final class MixerModel: ObservableObject {
         if let errorMessage, !desiredRunning { return errorMessage }
         if !driverInstalled { return "需要安装虚拟麦克风" }
         if !desiredRunning { return "混音已停止" }
-        if status.starting { return "正在等待音频输入…" }
+        if requestingPermission { return "等待麦克风授权…" }
+        if settings.captureOnDemand && virtualInputInUse == nil { return "无法检测虚拟麦克风使用状态" }
+        if waitingForClient { return "待命中，等待其他 App 使用麦克风" }
+        if status.starting && !healthy { return "正在等待音频输入…" }
         if !status.outputReady { return "虚拟输出正在恢复" }
         if !status.anyReceiving { return "等待输入设备收音" }
         if !status.allReceiving { return "部分输入暂时中断" }
         return "正在输出混合声音"
     }
     var healthy: Bool { desiredRunning && status.outputReady && status.allReceiving && !busy }
+    var waitingForClient: Bool {
+        desiredRunning && settings.captureOnDemand && virtualInputInUse == false && !status.running && !busy
+    }
+    var actionTitle: String {
+        if desiredRunning { return waitingForClient ? "停止待命" : "停止混音" }
+        return settings.captureOnDemand ? "开始待命" : "开始混音"
+    }
 
     func refresh() {
         guard !polling, !busy, !sleeping, !quitting else { return }
         polling = true
+        let version = commandVersion
         worker.refresh { [weak self] result in
             guard let self else { return }
             self.polling = false
-            guard !self.quitting else { return }
+            guard !self.quitting, !self.busy, !self.sleeping, self.commandVersion == version else { return }
             switch result {
             case let .success((list, state)):
                 self.devices = list.inputs.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
                 self.driverInstalled = list.driverInstalled
                 self.driverVersion = list.driverVersion
+                self.virtualInputInUse = list.virtualInputInUse
                 self.status = state
                 self.permission = AVCaptureDevice.authorizationStatus(for: .audio)
-                if self.desiredRunning && self.permission != .authorized {
+                if self.desiredRunning && (self.permission == .denied || self.permission == .restricted) {
                     self.stop()
                     self.errorMessage = "麦克风权限已关闭，请在系统设置中恢复"
                     return
                 }
                 if !self.didAutoStart {
-                    if !self.settings.startOnLaunch || self.settings.inputs.isEmpty || self.permission != .authorized {
+                    let allowedToArm = self.permission == .authorized ||
+                        (self.settings.captureOnDemand && self.permission == .notDetermined)
+                    if !self.settings.startOnLaunch || self.settings.inputs.isEmpty || !allowedToArm {
                         self.didAutoStart = true
                     } else if self.canStart {
                         self.didAutoStart = true
                         self.start()
                     }
                 }
-                if self.desiredRunning && !state.starting && !state.outputReady && Date() >= self.nextRecovery {
-                    self.recover()
-                }
+                self.reconcileCapture()
                 if state.outputReady { self.recoveryAttempts = 0 }
-            case let .failure(error): self.errorMessage = error.localizedDescription
+            case let .failure(error):
+                self.errorMessage = error.localizedDescription
+                if self.settings.captureOnDemand {
+                    self.virtualInputInUse = nil
+                    self.reconcileCapture()
+                }
             }
         }
     }
@@ -129,27 +152,62 @@ final class MixerModel: ObservableObject {
             return
         }
         permission = AVCaptureDevice.authorizationStatus(for: .audio)
-        if permission == .notDetermined {
-            AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
-                DispatchQueue.main.async {
-                    self?.permission = AVCaptureDevice.authorizationStatus(for: .audio)
-                    if granted { self?.start() } else { self?.errorMessage = "需要麦克风权限才能合并输入" }
+        guard permission == .authorized || permission == .notDetermined else {
+            errorMessage = "请在系统设置中允许 Mac Mic Mixer 使用麦克风"; return
+        }
+        desiredRunning = true
+        errorMessage = nil
+        recoveryAttempts = 0
+        nextRecovery = .distantPast
+        captureDemand = CaptureDemand()
+        reconcileCapture()
+    }
+
+    private func reconcileCapture() {
+        guard desiredRunning, !busy, !sleeping, !quitting else { return }
+        let shouldCapture = captureDemand.wantsCapture(
+            armed: desiredRunning, onDemand: settings.captureOnDemand,
+            clientInUse: virtualInputInUse, capturing: status.running,
+            now: ProcessInfo.processInfo.systemUptime)
+        if shouldCapture {
+            if permission == .notDetermined {
+                if status.running { pauseCapture() }
+                requestMicrophoneAccess()
+                return
+            }
+            if !status.starting && !status.outputReady && Date() >= nextRecovery { recover() }
+        } else if status.running {
+            pauseCapture()
+        }
+    }
+
+    private func requestMicrophoneAccess() {
+        guard !requestingPermission, !quitting else { return }
+        requestingPermission = true
+        AVCaptureDevice.requestAccess(for: .audio) { [weak self] granted in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.requestingPermission = false
+                self.permission = AVCaptureDevice.authorizationStatus(for: .audio)
+                guard !self.quitting else { return }
+                if granted {
+                    self.reconcileCapture()
+                } else {
+                    self.stop()
+                    self.errorMessage = "需要麦克风权限才能合并输入"
                 }
             }
-            return
         }
-        guard permission == .authorized else { errorMessage = "请在系统设置中允许 Mac Mic Mixer 使用麦克风"; return }
-        desiredRunning = true
-        recoveryAttempts = 0
-        beginStart()
     }
 
     private func beginStart() {
         guard !busy, !sleeping, !quitting else { return }
         busy = true
         errorMessage = nil
+        commandVersion += 1
+        let version = commandVersion
         worker.start(settings) { [weak self] error in
-            guard let self else { return }
+            guard let self, !self.quitting, self.commandVersion == version else { return }
             self.busy = false
             if let error {
                 self.errorMessage = error
@@ -161,6 +219,7 @@ final class MixerModel: ObservableObject {
 
     private func recover() {
         guard !busy, desiredRunning, !sleeping, Date() >= nextRecovery else { return }
+        guard !settings.captureOnDemand || virtualInputInUse == true else { return }
         recoveryAttempts += 1
         nextRecovery = Date().addingTimeInterval(min(pow(2, Double(recoveryAttempts)), 30))
         if driverInstalled && canStart { beginStart() }
@@ -170,19 +229,38 @@ final class MixerModel: ObservableObject {
         guard !quitting else { return }
         didAutoStart = true
         desiredRunning = false
+        captureDemand = CaptureDemand()
         busy = true
         controlsUpdate?.cancel()
+        commandVersion += 1
+        let version = commandVersion
         worker.stop { [weak self] in
-            self?.busy = false
-            self?.status = .stopped
-            self?.refresh()
+            guard let self, !self.quitting, self.commandVersion == version else { return }
+            self.busy = false
+            self.status = .stopped
+            self.refresh()
+        }
+    }
+
+    private func pauseCapture() {
+        busy = true
+        commandVersion += 1
+        let version = commandVersion
+        worker.stop { [weak self] in
+            guard let self, !self.quitting, self.commandVersion == version else { return }
+            self.busy = false
+            self.status = .stopped
+            self.errorMessage = nil
+            self.recoveryAttempts = 0
+            self.nextRecovery = .distantPast
+            self.refresh()
         }
     }
 
     private func suspend() {
         sleeping = true
-        worker.stop()
-        status = .stopped
+        captureDemand = CaptureDemand()
+        pauseCapture()
     }
 
     func addInput() {
@@ -214,6 +292,17 @@ final class MixerModel: ObservableObject {
     }
     func setMasterGain(_ gain: Double) { settings.masterGain = gain; saveAndUpdateControls() }
     func setStartOnLaunch(_ enabled: Bool) { settings.startOnLaunch = enabled; save() }
+    func setCaptureOnDemand(_ enabled: Bool) {
+        guard !busy, !quitting else { return }
+        settings.captureOnDemand = enabled
+        captureDemand = CaptureDemand()
+        save()
+        if desiredRunning && enabled && virtualInputInUse != true && status.running {
+            pauseCapture()
+        } else {
+            reconcileCapture()
+        }
+    }
 
     private func saveAndUpdateControls() {
         save()
@@ -256,10 +345,12 @@ final class MixerModel: ObservableObject {
         let resume = desiredRunning
         desiredRunning = false
         busy = true
+        commandVersion += 1
+        let version = commandVersion
         notice = "正在发送并回读测试音…"
         diagnosticMessage = nil
         worker.verify { [weak self] result in
-            guard let self else { return }
+            guard let self, !self.quitting, self.commandVersion == version else { return }
             self.busy = false
             self.status = .stopped
             self.notice = nil
@@ -283,6 +374,7 @@ final class MixerModel: ObservableObject {
     }
     func terminate(_ done: @escaping @MainActor () -> Void) {
         quitting = true
+        commandVersion += 1
         desiredRunning = false
         timer?.invalidate()
         controlsUpdate?.cancel()
